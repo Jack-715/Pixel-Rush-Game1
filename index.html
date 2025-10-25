@@ -1,1 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Breaker</title>
+    <!-- Custom Font from Google Fonts for a retro feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0e12;
+            --neon-blue: #0ff;
+            --neon-pink: #f0f;
+            --neon-green: #0f0;
+            --text-color: #fff;
+            --paddle-color: var(--neon-blue);
+            --ball-color: var(--neon-pink);
+            --font-family: 'Orbitron', sans-serif;
+        }
 
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: rgba(0, 0, 0, 0.4);
+            border: 4px solid var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue), inset 0 0 5px var(--neon-blue);
+            border-radius: 12px;
+            padding: 10px;
+            text-align: center;
+            max-width: 90%;
+            width: 600px;
+        }
+
+        h1 {
+            color: var(--neon-green);
+            text-shadow: 0 0 5px var(--neon-green), 0 0 10px var(--neon-green);
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+        }
+
+        #gameCanvas {
+            background: #000;
+            display: block;
+            border: 2px solid var(--neon-pink);
+            box-shadow: 0 0 10px var(--neon-pink);
+            border-radius: 8px;
+            margin: 10px auto;
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 15px;
+            font-size: 1.1rem;
+            color: var(--neon-blue);
+            text-shadow: 0 0 3px var(--neon-blue);
+        }
+
+        /* Styled Button */
+        .btn {
+            background-color: var(--neon-pink);
+            color: var(--bg-color);
+            border: none;
+            padding: 10px 20px;
+            margin-top: 15px;
+            border-radius: 6px;
+            font-family: var(--font-family);
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--neon-pink);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            background-color: #fff;
+            box-shadow: 0 0 15px var(--neon-pink), 0 0 30px rgba(255, 0, 255, 0.5);
+        }
+
+        .btn:disabled {
+            background-color: #333;
+            color: #777;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        /* Message Box Styling (Custom alert replacement) */
+        #messageBox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none; /* Controlled by JS */
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .message-content {
+            background-color: var(--bg-color);
+            border: 4px solid var(--neon-green);
+            box-shadow: 0 0 20px var(--neon-green), inset 0 0 5px var(--neon-green);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .message-content h2 {
+            color: var(--neon-pink);
+            text-shadow: 0 0 5px var(--neon-pink);
+            margin-bottom: 15px;
+            font-size: 2rem;
+        }
+
+        .message-content p {
+            font-size: 1.2rem;
+            margin-bottom: 25px;
+        }
+
+        @media (max-width: 650px) {
+            .game-container {
+                width: 95%;
+                padding: 5px;
+            }
+            #gameCanvas {
+                width: 100%;
+                /* Height will scale proportionally */
+            }
+            h1 {
+                font-size: 1.4rem;
+            }
+            .info-panel {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>Cosmic Breaker</h1>
+        <div class="info-panel">
+            <span id="score">Score: 0</span>
+            <span id="lives">Lives: 3</span>
+        </div>
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        <button id="startButton" class="btn">Start Game (Use Left/Right Arrows)</button>
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="messageBox">
+        <div class="message-content">
+            <h2 id="messageTitle"></h2>
+            <p id="messageText"></p>
+            <button id="messageButton" class="btn">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME VARIABLES & SETUP ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const livesDisplay = document.getElementById('lives');
+        const startButton = document.getElementById('startButton');
+        const messageBox = document.getElementById('messageBox');
+        const messageTitle = document.getElementById('messageTitle');
+        const messageText = document.getElementById('messageText');
+        const messageButton = document.getElementById('messageButton');
+
+        // Game State
+        let gameRunning = false;
+        let animationFrameId;
+
+        // Ball properties
+        let x, y; // Ball position
+        let dx = 4; // Horizontal speed
+        let dy = -4; // Vertical speed
+        const ballRadius = 6;
+
+        // Paddle properties
+        const paddleHeight = 10;
+        const paddleWidth = 75;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+
+        // Brick properties
+        const brickRowCount = 5;
+        const brickColumnCount = 7;
+        const brickWidth = 75;
+        const brickHeight = 20;
+        const brickPadding = 10;
+        const brickOffsetTop = 30;
+        const brickOffsetLeft = 30;
+
+        let bricks = [];
+        let score = 0;
+        let lives = 3;
+
+        // --- GAME LOGIC FUNCTIONS ---
+
+        function initBricks() {
+            bricks = [];
+            for (let c = 0; c < brickColumnCount; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < brickRowCount; r++) {
+                    // status 1 means brick is present
+                    bricks[c][r] = { x: 0, y: 0, status: 1, scoreValue: (brickRowCount - r) * 10 };
+                }
+            }
+        }
+
+        function resetBallAndPaddle() {
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 4 * (Math.random() > 0.5 ? 1 : -1); // Random initial horizontal direction
+            dy = -4;
+            paddleX = (canvas.width - paddleWidth) / 2;
+        }
+
+        function startGame() {
+            // Setup initial game state
+            score = 0;
+            lives = 3;
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+            initBricks();
+            resetBallAndPaddle();
+
+            messageBox.style.display = 'none';
+            startButton.disabled = true;
+
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            gameRunning = true;
+            gameLoop();
+        }
+
+        function showMessage(title, text) {
+            gameRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            messageBox.style.display = 'flex';
+        }
+
+        function collisionDetection() {
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    const b = bricks[c][r];
+                    if (b.status === 1) {
+                        if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                            dy = -dy; // Reverse vertical direction
+                            b.status = 0; // Destroy the brick
+                            score += b.scoreValue;
+                            scoreDisplay.textContent = `Score: ${score}`;
+
+                            // Check for Win condition
+                            let bricksRemaining = bricks.flat().filter(brick => brick.status === 1).length;
+                            if (bricksRemaining === 0) {
+                                showMessage("VICTORY!", `Amazing job! You cleared all the cosmic debris. Final Score: ${score}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ball-color');
+            ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--ball-color');
+            ctx.shadowBlur = 10;
+            ctx.fill();
+            ctx.closePath();
+            ctx.shadowBlur = 0; // Reset shadow for other elements
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--paddle-color');
+            ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--paddle-color');
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.closePath();
+            ctx.shadowBlur = 0; // Reset shadow
+        }
+
+        function drawBricks() {
+            const colorPalette = [
+                '#ff3355', // Reddish for top row
+                '#ff8c00', // Orange
+                '#ffff00', // Yellow
+                '#33ff33', // Greenish
+                '#33ccff'  // Light Blue for bottom row
+            ];
+
+            for (let c = 0; c < brickColumnCount; c++) {
+                for (let r = 0; r < brickRowCount; r++) {
+                    const b = bricks[c][r];
+                    if (b.status === 1) {
+                        const brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+                        const brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+                        b.x = brickX;
+                        b.y = brickY;
+
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        const color = colorPalette[r % colorPalette.length];
+                        ctx.fillStyle = color;
+                        ctx.shadowColor = color;
+                        ctx.shadowBlur = 8;
+                        ctx.fill();
+
+                        // Add a border for extra visual depth
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        ctx.closePath();
+                        ctx.shadowBlur = 0; // Reset shadow
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            // Clear the canvas on every frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            collisionDetection();
+
+            // Ball physics: movement and wall collision
+            if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if (y + dy < ballRadius) {
+                dy = -dy; // Top wall collision
+            } else if (y + dy > canvas.height - ballRadius) {
+                // Check for paddle collision when ball is at the bottom
+                if (x > paddleX && x < paddleX + paddleWidth) {
+                    dy = -dy; // Reverse direction
+                    // Simple angle change based on where the ball hits the paddle
+                    const relativeIntersectX = (x - (paddleX + paddleWidth / 2));
+                    dx = relativeIntersectX * 0.3; // Affect horizontal speed
+                } else {
+                    // Ball missed the paddle (Game Over or Lose Life)
+                    lives--;
+                    livesDisplay.textContent = `Lives: ${lives}`;
+                    if (lives <= 0) {
+                        showMessage("GAME OVER", `You ran out of lives! Your Score: ${score}`);
+                    } else {
+                        // Reset ball and paddle for next life
+                        resetBallAndPaddle();
+                    }
+                }
+            }
+
+            // Paddle movement
+            if (rightPressed && paddleX < canvas.width - paddleWidth) {
+                paddleX += 7;
+            } else if (leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            // Apply movement
+            x += dx;
+            y += dy;
+        }
+
+        function gameLoop() {
+            if (gameRunning) {
+                draw();
+                animationFrameId = requestAnimationFrame(gameLoop);
+            } else {
+                startButton.disabled = false;
+            }
+        }
+
+        // --- EVENT LISTENERS (Input Handling) ---
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        // Attach listeners
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+        startButton.addEventListener('click', startGame);
+        messageButton.addEventListener('click', startGame);
+
+        // Optional: Touch/Mouse input for paddle movement (Mobile/Touch compatibility)
+        function mouseMoveHandler(e) {
+            if (!gameRunning) return;
+            // Calculate relative position within the canvas
+            const relativeX = e.clientX - canvas.getBoundingClientRect().left;
+            if (relativeX > 0 && relativeX < canvas.width) {
+                paddleX = relativeX - paddleWidth / 2;
+            }
+        }
+        canvas.addEventListener("mousemove", mouseMoveHandler, false);
+        canvas.addEventListener("touchmove", (e) => {
+            if (!gameRunning || !e.touches[0]) return;
+            const relativeX = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+            if (relativeX > 0 && relativeX < canvas.width) {
+                paddleX = relativeX - paddleWidth / 2;
+                e.preventDefault(); // Prevent scrolling on touch devices
+            }
+        }, false);
+
+
+        // --- INITIAL DRAW / WELCOME SCREEN ---
+        // Draw the initial state and show instructions
+        function drawWelcomeScreen() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBricks(); // Draw bricks in their initial state
+            drawPaddle();
+            drawBall(); // Draw ball and paddle in their starting positions
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = '24px Orbitron';
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-green');
+            ctx.textAlign = 'center';
+            ctx.fillText('Cosmic Breaker Ready!', canvas.width / 2, canvas.height / 2 - 30);
+
+            ctx.font = '16px Orbitron';
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--neon-blue');
+            ctx.fillText('Press "Start Game" or SPACE to begin.', canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText('Control the paddle with LEFT and RIGHT Arrow keys.', canvas.width / 2, canvas.height / 2 + 40);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+             // Initial setup on load
+            initBricks();
+            resetBallAndPaddle();
+            drawWelcomeScreen();
+        });
+
+        // Add SPACEBAR listener to start
+        document.addEventListener("keyup", (e) => {
+            if (e.key === " " && !gameRunning) {
+                startGame();
+            }
+        });
+
+    </script>
+</body>
+</html>
